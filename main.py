@@ -1,5 +1,5 @@
 import zipfile
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, BackgroundTasks
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
@@ -9,11 +9,15 @@ import openai
 import os
 import requests
 import json
+import uuid
 
 # Set your OpenAI API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
+
+# In-memory storage for task results (use a database in production)
+task_results = {}
 
 # Enable CORS for your frontend
 app.add_middleware(
@@ -442,6 +446,83 @@ async def agent_response(query: str = Form(...), file: UploadFile = File(...)):
         return JSONResponse(content={"error": str(e)}, status_code=400)
 
 
+def process_in_background(task_id: str, query: str, file_content: bytes):
+    try:
+        # Upload the file to OpenAI
+        uploaded_file = openai.files.create(
+            file=io.BytesIO(file_content),
+            purpose='assistants'
+        )
+
+        # Create an Assistant
+        assistant = openai.beta.assistants.create(
+            name="File Processor Assistant",
+            instructions="You are an assistant that processes the uploaded file to answer the user's query.",
+            model="gpt-4o",
+            tools=[{"type": "code_interpreter"}],
+            tool_resources={
+                "code_interpreter": {
+                    "file_ids": [uploaded_file.id]
+                }
+            }
+        )
+
+        # Create a Thread
+        thread = openai.beta.threads.create()
+
+        # Add the user's message to the Thread
+        message = openai.beta.threads.messages.create(
+            thread_id=thread.id,
+            role="user",
+            content=query
+        )
+
+        # Run the Assistant on the Thread to get a response
+        run = openai.beta.threads.runs.create_and_poll(
+            thread_id=thread.id,
+            assistant_id=assistant.id,
+            instructions="Please process the uploaded file and answer the user's query."
+        )
+
+        if run.status == 'completed': 
+            messages = openai.beta.threads.messages.list(
+                thread_id=thread.id
+            )
+
+            first_response = None
+            for msg in messages.data:
+                if msg.role == "assistant":
+                    content_blocks = msg.content
+                    if content_blocks and content_blocks[0].type == "text":
+                        first_response = content_blocks[0].text.value
+                        break
+
+            print("Assistant response generated:", first_response)
+            task_results[task_id] = {"status": "completed", "result": first_response}
+        else:
+            task_results[task_id] = {"status": "failed", "result": "Assistant run not completed successfully."}
+
+    except Exception as e:
+        task_results[task_id] = {"status": "failed", "result": str(e)}
+
+@app.post("/agent-response-async/")
+async def agent_response_async(query: str, file: UploadFile, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    print("Received task with ID:", task_id)
+    file_content = await file.read()
+    background_tasks.add_task(process_in_background, task_id, query, file_content)
+    task_results[task_id] = {"status": "processing"}
+    return JSONResponse(content={"status": "Processing", "task_id": task_id}, status_code=202)
+
+@app.get("/task-result/{task_id}")
+async def get_task_result(task_id: str):
+    print("All tasks:", task_results)
+    result = task_results.get(task_id)
+    if not result:
+        return JSONResponse(content={"status": "Not Found"}, status_code=404)
+    return JSONResponse(content=result)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
