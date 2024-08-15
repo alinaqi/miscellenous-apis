@@ -94,6 +94,8 @@ def encode_image(image):
 
 @app.post("/detect-garage/")
 async def detect_garage(file: UploadFile = File(...), new_garage_file: UploadFile = File(...)):
+
+
     try:
         # Load the original image
         print("loading image: ", file.filename)
@@ -202,8 +204,8 @@ async def detect_garage(file: UploadFile = File(...), new_garage_file: UploadFil
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
 
-@app.post("/replace-garage/")
-async def replace_garage(original_file: UploadFile = File(...), new_garage_file: UploadFile = File(...)):
+
+
     try:
         # Load the original image
         print("loading original image: ", original_file.filename)
@@ -288,3 +290,69 @@ async def replace_garage(original_file: UploadFile = File(...), new_garage_file:
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
+    
+
+@app.post("/capture-receipt/")
+async def capture_receipt(file: UploadFile = File(...)):
+    try:
+        # Load the receipt image
+        print("Loading receipt image:", file.filename)
+        receipt_image = Image.open(io.BytesIO(await file.read()))
+
+        # Encode the receipt image to base64
+        base64_image = encode_image(receipt_image)
+
+        # Prepare the payload for OpenAI API
+        payload = {
+            "model": "gpt-4o",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", 
+                         "text": 
+                         "Extract the details from this receipt image and return it in JSON format. The JSON should include fields like 'store_name', 'date', 'items' (which should be a list of objects with 'name', 'quantity', 'price', etc.), 'total_amount', and any other relevant details."},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{base64_image}"
+                            },
+                        },
+                    ],
+                }
+            ]
+        }
+
+        # Make the request to OpenAI API
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {openai.api_key}",
+        }
+        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+
+        # Handle the response
+        if response.status_code == 200:
+            result = response.json().get("choices")[0].get("message").get("content")
+            print("OpenAI API Response:", result)
+            
+            # Parse the result to remove any surrounding ```json and convert it to a dictionary
+            result_dict_str = result.strip("```json").strip("```").strip()
+            print("Result Dict Str:", result_dict_str)
+            result_dict = json.loads(result_dict_str)
+
+            # Return the extracted details as a JSON response
+            print("Extracted Receipt Data:", result_dict)
+            return JSONResponse(content=result_dict)
+
+        else:
+            print("Error from OpenAI API:", response.status_code, response.text)
+            return JSONResponse(content={"error": response.text}, status_code=response.status_code)
+
+    except Exception as e:
+        print("Error processing receipt:", str(e))
+        return JSONResponse(content={"error": str(e)}, status_code=400)
+    
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
