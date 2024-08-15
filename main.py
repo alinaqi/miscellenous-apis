@@ -1,5 +1,5 @@
 import zipfile
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
@@ -147,56 +147,56 @@ async def detect_garage(file: UploadFile = File(...), new_garage_file: UploadFil
 
             return JSONResponse(content=result_dict)    
 
-            try:
-                if result_dict.get("found") == "true":
-                    print("Garage door found in the image!")
-                    garage_data = result_dict["garage"]
+            # try:
+            #     if result_dict.get("found") == "true":
+            #         print("Garage door found in the image!")
+            #         garage_data = result_dict["garage"]
 
-                    print("Garage Data:", garage_data)
-                    # Resize new garage image to the specified width and height
-                    print("Resizing new garage image...")
-                    # Load the new garage door image
-                    print("loading new garage image: ", new_garage_file.filename)
-                    new_garage_image = Image.open(io.BytesIO(await new_garage_file.read())) 
-                    new_garage_resized = new_garage_image.resize(
-                        (garage_data["width_pixels"], garage_data["height_pixels"])
-                    )
+            #         print("Garage Data:", garage_data)
+            #         # Resize new garage image to the specified width and height
+            #         print("Resizing new garage image...")
+            #         # Load the new garage door image
+            #         print("loading new garage image: ", new_garage_file.filename)
+            #         new_garage_image = Image.open(io.BytesIO(await new_garage_file.read())) 
+            #         new_garage_resized = new_garage_image.resize(
+            #             (garage_data["width_pixels"], garage_data["height_pixels"])
+            #         )
 
-                    # Copy the original image to preserve it before modifying
-                    modified_image = original_image.copy()
+            #         # Copy the original image to preserve it before modifying
+            #         modified_image = original_image.copy()
 
-                    # Paste the new garage image onto the copied image at the specified coordinates
-                    print("Pasting new garage image onto original image on coordinates:", garage_data["x"], garage_data["y"])
-                    modified_image.paste(new_garage_resized, (garage_data["x"], garage_data["y"]))
+            #         # Paste the new garage image onto the copied image at the specified coordinates
+            #         print("Pasting new garage image onto original image on coordinates:", garage_data["x"], garage_data["y"])
+            #         modified_image.paste(new_garage_resized, (garage_data["x"], garage_data["y"]))
 
-                    print("Garage door replaced successfully!")
-                    print("Returning original and modified images...")
+            #         print("Garage door replaced successfully!")
+            #         print("Returning original and modified images...")
 
-                    # Save both images to separate buffers
-                    original_buffer = io.BytesIO()
-                    original_image.save(original_buffer, format="JPEG")
-                    original_buffer.seek(0)
+            #         # Save both images to separate buffers
+            #         original_buffer = io.BytesIO()
+            #         original_image.save(original_buffer, format="JPEG")
+            #         original_buffer.seek(0)
 
-                    modified_buffer = io.BytesIO()
-                    modified_image.save(modified_buffer, format="JPEG")
-                    modified_buffer.seek(0)
+            #         modified_buffer = io.BytesIO()
+            #         modified_image.save(modified_buffer, format="JPEG")
+            #         modified_buffer.seek(0)
 
-                    # Create a ZIP file containing both images
-                    zip_buffer = io.BytesIO()
-                    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-                        zip_file.writestr("original_image.jpg", original_buffer.getvalue())
-                        zip_file.writestr("modified_image.jpg", modified_buffer.getvalue())
-                    zip_buffer.seek(0)
+            #         # Create a ZIP file containing both images
+            #         zip_buffer = io.BytesIO()
+            #         with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+            #             zip_file.writestr("original_image.jpg", original_buffer.getvalue())
+            #             zip_file.writestr("modified_image.jpg", modified_buffer.getvalue())
+            #         zip_buffer.seek(0)
 
-                    # Return the ZIP file as a streaming response
-                    return StreamingResponse(zip_buffer, media_type="application/zip", headers={
-                        "Content-Disposition": "attachment; filename=garage_images.zip"
-                    })
-                else:
-                    return JSONResponse(content={"error": "No garage door found in the image"}, status_code=400)
-            except Exception as e:
-                print("Error replacing garage door:", str(e))
-                return JSONResponse(content={"error": str(e)}, status_code=400)
+            #         # Return the ZIP file as a streaming response
+            #         return StreamingResponse(zip_buffer, media_type="application/zip", headers={
+            #             "Content-Disposition": "attachment; filename=garage_images.zip"
+            #         })
+            #     else:
+            #         return JSONResponse(content={"error": "No garage door found in the image"}, status_code=400)
+            # except Exception as e:
+                # print("Error replacing garage door:", str(e))
+                # return JSONResponse(content={"error": str(e)}, status_code=400)
         else:
             print("Error from OpenAI API:", response.status_code, response.text)
             return JSONResponse(content={"error": response.text}, status_code=response.status_code)
@@ -351,7 +351,96 @@ async def capture_receipt(file: UploadFile = File(...)):
     except Exception as e:
         print("Error processing receipt:", str(e))
         return JSONResponse(content={"error": str(e)}, status_code=400)
-    
+
+
+query_instructions = """
+Given the uploaded file, process the file to answer the user's query. Use the following guideline:
+if the file is .xlsx file, then directly process it as excel file. 
+if the file is .csv file, then process it as csv file. 
+Always assume that there is a header row in the file and use that to answer user's question. 
+Simplify user query to get accurate information from the file. For example, if user says "June 24", you should use it as June 2024 i.e the entire month of June. This query simplification should be done based on the data structure of the uploaded file e.g. if it's monthly date then user query should be simplified and assumed to be monthly. 
+"""
+
+
+@app.post("/agent-response/")
+async def agent_response(query: str = Form(...), file: UploadFile = File(...)):
+    try:
+        # Load the file content
+        print("Loading file:", file.filename)
+        file_content = await file.read()
+
+        # Upload the file to OpenAI
+        uploaded_file = openai.files.create(
+            file=io.BytesIO(file_content),
+            purpose='assistants'
+        )
+        print("File uploaded with ID:", uploaded_file.id)
+
+        # Create an Assistant with the Code Interpreter tool enabled
+        assistant = openai.beta.assistants.create(
+            name="File Processor Assistant",
+            instructions="You are an assistant that processes the uploaded file to answer the user's query.",
+            model="gpt-4o",
+            tools=[{"type": "code_interpreter"}],
+            tool_resources={
+                "code_interpreter": {
+                    "file_ids": [uploaded_file.id]
+                }
+            }
+        )
+        print("Assistant created with ID:", assistant.id)
+
+        # Create a Thread for the conversation
+        thread = openai.beta.threads.create()
+        print("Thread created with ID:", thread.id)
+
+        # Add the user's message to the Thread
+        message = openai.beta.threads.messages.create(
+            thread_id=thread.id,
+            role="user",
+            content=query
+        )
+        print("Message added to thread with content:", query)
+
+        # Run the Assistant on the Thread to get a response
+        run = openai.beta.threads.runs.create_and_poll(
+            thread_id=thread.id,
+            assistant_id=assistant.id,
+            instructions=query_instructions
+        )
+        print("Assistant response generated")
+
+        if run.status == 'completed': 
+            messages = openai.beta.threads.messages.list(
+                thread_id=thread.id
+            )
+            print("Messages retrieved successfully")
+
+            # Extract the content from the messages and convert to a list of JSON objects
+            message_contents = []
+            first_response = None
+            for msg in messages.data:
+                if msg.role == "assistant":
+                    content_blocks = msg.content
+                    if content_blocks and content_blocks[0].type == "text":
+                        first_response = content_blocks[0].text.value
+                        break
+
+            if first_response:
+                return JSONResponse(content={"response": first_response})
+            else:
+                return JSONResponse(content={"error": "No valid response from the assistant."}, status_code=500)
+
+        else:
+            print(run.status)
+            
+
+        return JSONResponse(content={"response": messages})
+
+    except Exception as e:
+        print("Error processing request:", str(e))
+        return JSONResponse(content={"error": str(e)}, status_code=400)
+
 
 if __name__ == "__main__":
     import uvicorn
