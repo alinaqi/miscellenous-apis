@@ -10,9 +10,13 @@ import os
 import requests
 import json
 import uuid
+from exa_py import Exa
+
 
 # Set your OpenAI API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
+exa = Exa(api_key="b7621e86-ef98-4d65-b429-f0f723131651")
+
 
 app = FastAPI()
 
@@ -34,6 +38,76 @@ def encode_image(image):
     image.save(buffer, format="PNG")
     buffer.seek(0)
     return base64.b64encode(buffer.read()).decode('utf-8')
+
+
+prompt_for_products = """
+"Identify in the image the product and return it in the JSON format: {'product': 'product_name', 'product_type': 'type_of_product', 'product_color': 'color of product', 'price_category':'price category of product'}. If no product is present, please return {'product': 'no product found'}"}"
+"""
+@app.post("/find-similar-products/")
+async def find_similar_products(file: UploadFile = File(...)):
+    try:
+        # Load the image
+        print("loading image: ", file.filename)
+        image = Image.open(io.BytesIO(await file.read()))
+
+        # Encode the image to base64
+        base64_image = encode_image(image)
+
+        # Prepare the payload for OpenAI API
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_for_products},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{base64_image}"
+                            },
+                        },
+                    ],
+                }
+            ]
+        }
+
+        # Make the request to OpenAI API
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {openai.api_key}",
+        }
+        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+
+        # Handle the response
+        if response.status_code == 200:
+            result = response.json().get("choices")[0].get("message").get("content")
+            print("OpenAI API Response:", result)
+            
+            # Parse the result to remove any surrounding ```json and ```
+            result_dict = eval(result.strip("```json").strip("```").strip())
+
+            # Return the cleaned JSON response
+            print("Result:", result_dict)
+
+
+            result = exa.search_and_contents(
+                f"Find similar products as given in the following json: {result_dict}",
+                type="auto",
+                num_results=3,
+                text=True,
+                include_domains=["https://extra.com"]
+                )
+
+            print("Result:", result)
+            return result 
+        else:
+            print("Error from OpenAI API:", response.status_code, response.text)
+            return JSONResponse(content={"error": response.text}, status_code=response.status_code)
+
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400)
+
 
 @app.post("/upload/")
 async def upload_image(file: UploadFile = File(...)):
@@ -362,13 +436,29 @@ Given the uploaded file, process the file to answer the user's query. Use the fo
 if the file is .xlsx file, then directly process it as excel file. 
 if the file is .csv file, then process it as csv file. 
 Always assume that there is a header row in the file and use that to answer user's question. 
-Simplify user query to get accurate information from the file. For example, if user says "June 24", you should use it as June 2024 i.e the entire month of June. This query simplification should be done based on the data structure of the uploaded file e.g. if it's monthly date then user query should be simplified and assumed to be monthly. 
+User query is provided as json for clarity.  Simplify it further, for example, if user says "June 24", you should use it as June 2024 i.e the entire month of June. This query simplification should be done based on the data structure of the uploaded file e.g. if it's monthly date then user query should be simplified and assumed to be monthly. 
 """
 
 
 @app.post("/agent-response/")
 async def agent_response(query: str = Form(...), file: UploadFile = File(...)):
     try:
+        # convert the query to json
+        response = openai.chat.completions.create(
+            model="gpt-4o",
+            response_format={ "type": "json_object" },
+            messages=[
+                {
+                    "role": "system", "content": "Analyze user query to clarify it so there is no ambiguity and convert it to JSON format. If there are dates mentioned e.g. June 24, simplify to June 2024 etc. Return data as JSON",
+                    "role": "user", "content": f"User query to be analyzed and converted to json: {query}"
+                }
+            ]
+        )
+
+        user_query = response.choices[0].message.content
+
+        print("User Query:", user_query)
+
         # Load the file content
         print("Loading file:", file.filename)
         file_content = await file.read()
@@ -402,7 +492,7 @@ async def agent_response(query: str = Form(...), file: UploadFile = File(...)):
         message = openai.beta.threads.messages.create(
             thread_id=thread.id,
             role="user",
-            content=query
+            content=user_query
         )
         print("Message added to thread with content:", query)
 
