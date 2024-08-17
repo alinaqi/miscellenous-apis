@@ -18,7 +18,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 exa = Exa(api_key="b7621e86-ef98-4d65-b429-f0f723131651")
 
 
-app = FastAPI()
+app = FastAPI(title="Image recognition apis", description="APIs for image recognition using OpenAI and agents", version="0.1")
 
 # In-memory storage for task results (use a database in production)
 task_results = {}
