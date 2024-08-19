@@ -449,13 +449,14 @@ async def agent_response(query: str = Form(...), file: UploadFile = File(...)):
             response_format={ "type": "json_object" },
             messages=[
                 {
-                    "role": "system", "content": "Analyze user query to clarify it so there is no ambiguity and convert it to JSON format. If there are dates mentioned e.g. June 24, simplify to June 2024 etc. Return data as JSON",
+                    "role": "system", "content": "Analyze user query to clarify it so there is no ambiguity and convert it to JSON format. If there are dates mentioned e.g. June 24, simplify to June 2024 i.e explain the data in as much detail as possible to remove any ambiguity. Return data should be { query: <query text>, intent: <intent>, ... other informations}. Intent can be one or more of count, request_information, or compare_information. Return data as JSON",
                     "role": "user", "content": f"User query to be analyzed and converted to json: {query}"
                 }
             ]
         )
 
         user_query = response.choices[0].message.content
+
 
         print("User Query:", user_query)
 
@@ -487,6 +488,7 @@ async def agent_response(query: str = Form(...), file: UploadFile = File(...)):
         # Create a Thread for the conversation
         thread = openai.beta.threads.create()
         print("Thread created with ID:", thread.id)
+        print ("adding... ", user_query)
 
         # Add the user's message to the Thread
         message = openai.beta.threads.messages.create(
@@ -611,6 +613,109 @@ async def get_task_result(task_id: str):
     if not result:
         return JSONResponse(content={"status": "Not Found"}, status_code=404)
     return JSONResponse(content=result)
+
+
+meta_prompt = """
+
+Generate an AI prompt/guidlines for an AI assistant for the given company information. 
+Do not return any other information. Do not summarize company information. Return the JSON prompt only as per the given example below:
+
+Example output:
+    {
+      {
+        "section_name": "specify_personality",
+        "description": "Define the personality and expertise of the AI. This includes how the AI should present itself and the areas of knowledge it should emphasize.",
+        "details": {
+          "description": "A brief overview of the AI's role and the company it represents.",
+          "expertise": "Specific areas of knowledge and skills the AI should focus on."
+        }
+      },
+      {
+        "section_name": "response_guidelines",
+        "description": "Provide detailed instructions on how the AI should craft its responses.",
+        "details": {
+          "language_matching": "Ensure the AI's response matches the language of the user's query.",
+          "clarity_and_precision": "Guide the AI to provide clear, accurate responses and to acknowledge any limitations.",
+          "expansion_and_value": "Encourage the AI to add additional relevant information when appropriate.",
+          "coding_queries": "Instruct the AI to generate code with comments for software-related queries.",
+          "email_request": "Direct the AI not to ask for the user's email."
+        }
+      },
+      {
+        "section_name": "interaction_etiquettes",
+        "description": "Outline the expected behavior during interactions with users.",
+        "details": {
+          "satisfaction_check": "Instruct the AI to ask users if they are satisfied with the response.",
+          "context_continuation": "Guide the AI to maintain context throughout the conversation."
+        }
+      },
+      {
+        "section_name": "formatting_guidelines",
+        "description": "Specify how the AI should format its responses for clarity and readability.",
+        "details": {
+          "structured_format": "Encourage the use of a clear, structured format in responses.",
+          "use_of_headings": "Suggest using headings to organize main points.",
+          "bullet_points_and_lists": "Recommend the use of bullet points or numbered lists for subpoints.",
+          "summary_in_complex_responses": "Advise including a summary for complex or lengthy responses."
+        }
+      },
+      {
+        "section_name": "scope_of_assistance",
+        "description": "Define the extent to which the AI should go to assist users.",
+        "details": {
+          "broad_scope": "Instruct the AI to be as comprehensive as possible, leveraging all available resources to provide accurate and helpful responses."
+        }
+      }
+    }
+
+"""
+
+meta_prompt2 = """
+
+Create an AI guideline for an AI bot on how to answer and interact with user queries for the company infomration described below:
+
+Example output:
+{
+  "introduction": {
+    <describe what the bot is e.g. You are an AI assistant for $company providing $service>
+  }
+  "personality": {
+    <add personality guideline here based on context>
+  },
+  "response_guidelines": {
+    <add response guideline here based on context>
+  },
+  "interaction_etiquettes": {
+    <add interaction guideline here based on context>
+  },
+  "formatting_and_presentation": {
+    <add formatting guideline here based on context> 
+  },
+  "scope_of_assistance": {
+    "broad_scope": "<add scope here> "
+  }
+}
+
+Company information is 
+
+"""
+@app.get("/generate-prompt/")
+async def generate_prompt(summary: str, use_case: str, scope: str):
+    # convert the query to json
+    response = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system", "content": f"{meta_prompt2} : {summary} \n use case: {use_case} \n scope: {scope}",
+                #  "role": "user", "content": f"Company information: {text}"
+            }
+        ]
+    )
+
+    prompt = response.choices[0].message.content
+
+    print("Prompt:", prompt)
+    return JSONResponse(content=prompt)
 
 if __name__ == "__main__":
     import uvicorn
