@@ -11,11 +11,12 @@ import requests
 import json
 import uuid
 from exa_py import Exa
+import csv
 
 
 # Set your OpenAI API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
-exa = Exa(api_key="b7621e86-ef98-4d65-b429-f0f723131651")
+exa = Exa(api_key=os.getenv("EXA_API_KEY"))
 
 
 app = FastAPI(title="Image recognition apis", description="APIs for image recognition using OpenAI and agents", version="0.1")
@@ -717,7 +718,849 @@ async def generate_prompt(summary: str, use_case: str, scope: str):
     print("Prompt:", prompt)
     return JSONResponse(content=prompt)
 
+
+input_json = {
+    "Input - Type of income": [
+        {
+            "Type of income": "Employment",
+            "Integer": 1
+        },
+        {
+            "Type of income": "Self-Employment",
+            "Integer": 2
+        },
+        {
+            "Type of income": "Spousal",
+            "Integer": 3
+        },
+        {
+            "Type of income": "Investment Income",
+            "Integer": 4
+        },
+        {
+            "Type of income": "Rental Income",
+            "Integer": 5
+        }
+    ],
+    "Input - Profession": [
+        {
+            "Profession": "Doctor/Lawyer",
+            "Integer": 1
+        },
+        {
+            "Profession": "Finance/Accountant/HR/IT/Sales",
+            "Integer": 2
+        },
+        {
+            "Profession": "Operational professional",
+            "Integer": 3
+        },
+        {
+            "Profession": "Civil servant (incl. teachers)",
+            "Integer": 4
+        },
+        {
+            "Profession": "Trades",
+            "Integer": 5
+        },
+        {
+            "Profession": "Bank",
+            "Integer": 6
+        },
+        {
+            "Profession": "RE Agent or Mortgage Agent",
+            "Integer": 7
+        },
+        {
+            "Profession": "Other",
+            "Integer": 8
+        }
+    ],
+    "Input - Credit Score": [
+        {
+            "Credit score": "750+",
+            "Integer": 1
+        },
+        {
+            "Credit score": "700 - 749",
+            "Integer": 2
+        },
+        {
+            "Credit score": "680 -699",
+            "Integer": 3
+        },
+        {
+            "Credit score": "650 - 679",
+            "Integer": 4
+        },
+        {
+            "Credit score": "625 - 649",
+            "Integer": 5
+        },
+        {
+            "Credit score": "600 - 624",
+            "Integer": 6
+        },
+        {
+            "Credit score": "575 - 599",
+            "Integer": 7
+        },
+        {
+            "Credit score": "550 - 574",
+            "Integer": 8
+        },
+        {
+            "Credit score": "500 -549",
+            "Integer": 9
+        },
+        {
+            "Credit score": "<500",
+            "Integer": 10
+        }
+    ],
+    "Input - Kids": [
+        {
+            "Kids": "Yes",
+            "Integer": 1
+        },
+        {
+            "Kids": "No",
+            "Integer": 2
+        }
+    ],
+    "Input - Married": [
+        {
+            "Unnamed: 0": "Yes",
+            "Integer": 1
+        },
+        {
+            "Unnamed: 0": "No",
+            "Integer": 2
+        }
+    ],
+    "Input - Education": [
+        {
+            "Education": "Not HighSchool Grad",
+            "Integer": 1
+        },
+        {
+            "Education": "Highschool Grad",
+            "Integer": 2
+        },
+        {
+            "Education": "Undergraduate",
+            "Integer": 3
+        },
+        {
+            "Education": "Masters",
+            "Integer": 4
+        },
+        {
+            "Education": "PhD",
+            "Integer": 5
+        }
+    ],
+    "Input - Type of Financing": [
+        {
+            "Type of financing": "Purchase",
+            "Integer": 1
+        },
+        {
+            "Type of financing": "Switch",
+            "Integer": 2
+        },
+        {
+            "Type of financing": "Refi",
+            "Integer": 3
+        }
+    ],
+    "Input - Other Properties": [
+        {
+            "Other properties": "Yes",
+            "Integer": 1
+        },
+        {
+            "Other properties": "No",
+            "Integer": 2
+        }
+    ],
+    "Input - Race": [
+        {
+            "Race": "African Canadian",
+            "Integer": 1
+        },
+        {
+            "Race": "Asian Canadian",
+            "Integer": 2
+        },
+        {
+            "Race": "South Pacific Canadian",
+            "Integer": 3
+        },
+        {
+            "Race": "Native",
+            "Integer": 4
+        },
+        {
+            "Race": "White",
+            "Integer": 5
+        }
+    ],
+    "Input - Gender": [
+        {
+            "Gender": "M",
+            "Integer": 1
+        },
+        {
+            "Gender": "F",
+            "Integer": 2
+        },
+        {
+            "Gender": "T",
+            "Integer": 3
+        },
+        {
+            "Gender": "N ",
+            "Integer": 4
+        },
+        {
+            "Gender": "PNTS",
+            "Integer": 5
+        }
+    ],
+    "Input - Type of Home": [
+        {
+            "Type of Home": "Condo",
+            "Integer": 1
+        },
+        {
+            "Type of Home": "Town House",
+            "Integer": 2
+        },
+        {
+            "Type of Home": "Semi-Detached",
+            "Integer": 3
+        },
+        {
+            "Type of Home": "Single-Detached",
+            "Integer": 4
+        },
+        {
+            "Type of Home": "Mult-Family",
+            "Integer": 5
+        }
+    ],
+    "Input - Home Location": [
+        {
+            "Home Location": "Barrie",
+            "Integer": 1
+        },
+        {
+            "Home Location": "Newmarket",
+            "Integer": 2
+        },
+        {
+            "Home Location": "Aurora",
+            "Integer": 3
+        },
+        {
+            "Home Location": "Richmond Hill",
+            "Integer": 4
+        },
+        {
+            "Home Location": "Vaughan",
+            "Integer": 5
+        },
+        {
+            "Home Location": "Thornhill",
+            "Integer": 6
+        },
+        {
+            "Home Location": "North York",
+            "Integer": 7
+        },
+        {
+            "Home Location": "Mid-town Toronto",
+            "Integer": 8
+        },
+        {
+            "Home Location": "Toronto West",
+            "Integer": 9
+        },
+        {
+            "Home Location": "Down-town Toronto",
+            "Integer": 10
+        },
+        {
+            "Home Location": "East York",
+            "Integer": 11
+        },
+        {
+            "Home Location": "Etobicoke",
+            "Integer": 12
+        },
+        {
+            "Home Location": "Mississauga",
+            "Integer": 13
+        },
+        {
+            "Home Location": "Oakville",
+            "Integer": 14
+        },
+        {
+            "Home Location": "Burlington",
+            "Integer": 15
+        }
+    ],
+    "Input - Age": [
+        {
+            "Age": "<23",
+            "Integer": 1
+        },
+        {
+            "Age": "23-29",
+            "Integer": 2
+        },
+        {
+            "Age": "30-34",
+            "Integer": 3
+        },
+        {
+            "Age": "35-39",
+            "Integer": 4
+        },
+        {
+            "Age": "40-44",
+            "Integer": 5
+        },
+        {
+            "Age": "45-49",
+            "Integer": 6
+        },
+        {
+            "Age": "50-54",
+            "Integer": 7
+        },
+        {
+            "Age": "55-60",
+            "Integer": 8
+        },
+        {
+            "Age": "64-69",
+            "Integer": 9
+        },
+        {
+            "Age": ">69",
+            "Integer": 10
+        }
+    ],
+    "Input - Loan To Value": [
+        {
+            "Loan To Value": "<10%",
+            "Integer": 1
+        },
+        {
+            "Loan To Value": "10% - 20%",
+            "Integer": 2
+        },
+        {
+            "Loan To Value": "20.1% - 30%",
+            "Integer": 3
+        },
+        {
+            "Loan To Value": "30.1% - 40%",
+            "Integer": 4
+        },
+        {
+            "Loan To Value": "40.1% - 50%",
+            "Integer": 5
+        },
+        {
+            "Loan To Value": "50.1% - 60%",
+            "Integer": 6
+        },
+        {
+            "Loan To Value": "60.1% - 70%",
+            "Integer": 7
+        },
+        {
+            "Loan To Value": "70.1% - 80%",
+            "Integer": 8
+        },
+        {
+            "Loan To Value": "80.1% - 90%",
+            "Integer": 9
+        },
+        {
+            "Loan To Value": ">90%",
+            "Integer": 10
+        }
+    ],
+    "Input - Variables overview": [
+        {
+            "Variable": "Income level",
+            "Value": 1
+        },
+        {
+            "Variable": "Type of Income",
+            "Value": 2
+        },
+        {
+            "Variable": "Profession",
+            "Value": 3
+        },
+        {
+            "Variable": "Credit score",
+            "Value": 4
+        },
+        {
+            "Variable": "Requested Loan Value",
+            "Value": 5
+        },
+        {
+            "Variable": "Total LTV",
+            "Value": 6
+        },
+        {
+            "Variable": "Education level",
+            "Value": 7
+        },
+        {
+            "Variable": "Married",
+            "Value": 8
+        },
+        {
+            "Variable": "Kids",
+            "Value": 9
+        },
+        {
+            "Variable": "Age",
+            "Value": 10
+        },
+        {
+            "Variable": "Location",
+            "Value": 11
+        },
+        {
+            "Variable": "Type of home",
+            "Value": 12
+        },
+        {
+            "Variable": "Own other properties",
+            "Value": 13
+        },
+        {
+            "Variable": "Type of Financing",
+            "Value": 14
+        },
+        {
+            "Variable": "Gender",
+            "Value": 15
+        },
+        {
+            "Variable": "Race",
+            "Value": 16
+        }
+    ],
+    "Input - income level": [
+        {
+            "Income level": "<50,000",
+            "Integer": 1
+        },
+        {
+            "Income level": "50,001 - 75,000",
+            "Integer": 2
+        },
+        {
+            "Income level": "75,001 - 100,000",
+            "Integer": 3
+        },
+        {
+            "Income level": "100,001 - 125,000",
+            "Integer": 4
+        },
+        {
+            "Income level": "125,001 - 150,000",
+            "Integer": 5
+        },
+        {
+            "Income level": "150,001 - 175,000",
+            "Integer": 6
+        },
+        {
+            "Income level": "175,001 - 200,000",
+            "Integer": 7
+        },
+        {
+            "Income level": "200,001 - 225,000",
+            "Integer": 8
+        },
+        {
+            "Income level": "225,001 - 250,000",
+            "Integer": 9
+        },
+        {
+            "Income level": "250,001 - 300,000",
+            "Integer": 10
+        },
+        {
+            "Income level": "300,001 - 350,000",
+            "Integer": 11
+        },
+        {
+            "Income level": "350,001 - 400,000",
+            "Integer": 12
+        },
+        {
+            "Income level": "401,000 - 425,000",
+            "Integer": 13
+        },
+        {
+            "Income level": "425,001 - 450,000",
+            "Integer": 14
+        },
+        {
+            "Income level": "450,001 - 475,000",
+            "Integer": 15
+        },
+        {
+            "Income level": "475,001 - 500,000",
+            "Integer": 16
+        },
+        {
+            "Income level": ">500,000 ",
+            "Integer": 17
+        }
+    ],
+    "Input - Requested Loan Value": [
+        {
+            "Loan Value": "<100,000",
+            "Integer": 1
+        },
+        {
+            "Loan Value": "100,000 - 200,000",
+            "Integer": 2
+        },
+        {
+            "Loan Value": "200,001 - 300,000",
+            "Integer": 3
+        },
+        {
+            "Loan Value": "300,001 - 400,000",
+            "Integer": 4
+        },
+        {
+            "Loan Value": "400,001 - 500,000",
+            "Integer": 5
+        },
+        {
+            "Loan Value": "500,001 - 600,000",
+            "Integer": 6
+        },
+        {
+            "Loan Value": "600,001 - 700,000",
+            "Integer": 7
+        },
+        {
+            "Loan Value": "700,001 - 800,000",
+            "Integer": 8
+        },
+        {
+            "Loan Value": "800,001 - 900,000",
+            "Integer": 9
+        },
+        {
+            "Loan Value": "900,001 - 1,000,000",
+            "Integer": 10
+        },
+        {
+            "Loan Value": "1,000,001 - 1,100,000",
+            "Integer": 11
+        },
+        {
+            "Loan Value": "1,100,001 - 1,200,000",
+            "Integer": 12
+        },
+        {
+            "Loan Value": "1,200,001 - 1,300,000",
+            "Integer": 13
+        },
+        {
+            "Loan Value": "1,300,001 - 1,400,000",
+            "Integer": 14
+        },
+        {
+            "Loan Value": "1,400,001 - 1,500,000",
+            "Integer": 15
+        },
+        {
+            "Loan Value": ">1,500,000",
+            "Integer": 16
+        }
+    ]
+}
+
+
+outcome_json = {
+    "Outcome Rates 1": [
+        {
+            "Rates": "<4%",
+            "Integer": 1
+        },
+        {
+            "Rates": "4% - 4.5%",
+            "Integer": 2
+        },
+        {
+            "Rates": "4.51% - 5%",
+            "Integer": 3
+        },
+        {
+            "Rates": "5.01% - 5.5%",
+            "Integer": 4
+        },
+        {
+            "Rates": "5.51% - 6%",
+            "Integer": 5
+        },
+        {
+            "Rates": "6.01% - 6.5%",
+            "Integer": 6
+        },
+        {
+            "Rates": "6.51% - 7%",
+            "Integer": 7
+        },
+        {
+            "Rates": "7.01% - 7.5%",
+            "Integer": 8
+        },
+        {
+            "Rates": "7.51% - 8%",
+            "Integer": 9
+        },
+        {
+            "Rates": "8.01% - 8.5%",
+            "Integer": 10
+        },
+        {
+            "Rates": "8.51% - 9%",
+            "Integer": 11
+        },
+        {
+            "Rates": "9.01% - 9.5%",
+            "Integer": 12
+        },
+        {
+            "Rates": "9.51% - 10%",
+            "Integer": 13
+        },
+        {
+            "Rates": "10.01% - 10.5%",
+            "Integer": 14
+        },
+        {
+            "Rates": "10.51% - 11%",
+            "Integer": 15
+        },
+        {
+            "Rates": "11.1% - 12%",
+            "Integer": 16
+        },
+        {
+            "Rates": "12.1%-13%",
+            "Integer": 17
+        }
+    ],
+    "Outcome Results": [
+        {
+            "Success": "Financing",
+            "Integer": 1.0
+        },
+        {
+            "Success": "No Financing",
+            "Integer": 2.0
+        }
+    ],
+    "Outcome Type": [
+        {
+            "Success": "Type",
+            "Integer": None
+        },
+        {
+            "Success": "Prime",
+            "Integer": 1.0
+        },
+        {
+            "Success": "B Deal",
+            "Integer": 2.0
+        },
+        {
+            "Success": "Sub-Prime",
+            "Integer": 3.0
+        },
+        {
+            "Success": "Fees",
+            "Integer": None
+        }
+    ],
+    "Outcome Rates 2": [
+        {
+            "Success": "<1%",
+            "Integer": 1.0
+        },
+        {
+            "Success": "1%-1.99%",
+            "Integer": 2.0
+        },
+        {
+            "Success": "2%-2.99%",
+            "Integer": 3.0
+        },
+        {
+            "Success": "3%-3.99%",
+            "Integer": 4.0
+        },
+        {
+            "Success": "4%-4.99%",
+            "Integer": 5.0
+        },
+        {
+            "Success": "5%-5.99%",
+            "Integer": 6.0
+        }
+    ]
+}
+
+outcome_mapping_json = {
+  "Mapping": {
+    "Inputs": {
+      "Credit Score": {
+        "Range": {
+          "300-599": 1,
+          "600-649": 2,
+          "650-699": 3,
+          "700-749": 4,
+          "750-799": 5,
+          "800-850": 6
+        }
+      },
+      "Loan to Value (LTV)": {
+        "Range": {
+          "90-100%": 1,
+          "80-89%": 2,
+          "70-79%": 3,
+          "60-69%": 4,
+          "50-59%": 5,
+          "<50%": 6
+        }
+      },
+      "Type of Income": {
+        "Category": {
+          "Salaried": 1,
+          "Self-Employed": 2,
+          "Retired": 3,
+          "Unemployed": 4
+        }
+      },
+      "Age": {
+        "Range": {
+          "18-25": 1,
+          "26-35": 2,
+          "36-45": 3,
+          "46-60": 4,
+          "61+": 5
+        }
+      },
+      "Type of Home": {
+        "Category": {
+          "Single-Family": 1,
+          "Multi-Family": 2,
+          "Condominium": 3,
+          "Townhouse": 4
+        }
+      }
+    },
+    "Score Calculation": {
+      "Formula": "Sum of input variable scores"
+    },
+    "Outcomes": {
+      "Outcome Rates": {
+        "Mapping": {
+          "1-3": "<4%",
+          "4-5": "4% - 4.5%",
+          "6-7": "4.51% - 5%",
+          "8-9": "5.01% - 5.5%",
+          "10-11": "5.51% - 6%",
+          "12-13": "6.01% - 6.5%",
+          "14-15": "6.51% - 7%",
+          "16-17": "7.01% - 7.5%",
+          "18+": "7.51% - 8%"
+        }
+      },
+      "Outcome Results": {
+        "Mapping": {
+          "1-7": "Financing",
+          "8+": "No Financing"
+        }
+      },
+      "Outcome Type": {
+        "Mapping": {
+          "1-4": "Prime",
+          "5-7": "B Deal",
+          "8-10": "Sub-Prime",
+          "11+": "Fees"
+        }
+      }
+    }
+  }
+}
+
+@app.post("/calculate_mortage_outcome/")
+async def generate_prompt(file: UploadFile = File(...)):
+    # convert the query to json
+    mortagage_prompt = (
+        f"Given the following input data as JSON, use the scheme from {input_json} "
+        f"to calculate the outcome using the scheme from {outcome_json} and the mapping "
+        f"from {outcome_mapping_json}. Return the result as a summary form with the outcome, "
+        f"outcome rates, results, and type."
+    )
+
+    # Read the CSV file content
+    file_content = await file.read()
+    file_content = file_content.decode('utf-8')
+
+    # Parse CSV content
+    reader = csv.DictReader(file_content.splitlines())
+    
+    outcome = []
+    
+    for row in reader:
+        # Convert each line to JSON
+        input_data = json.dumps(row)
+
+        # Create the full prompt with the input data
+        full_prompt = mortagage_prompt + f"\nInput Data: {input_data}"
+    
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system", "content": full_prompt
+                }
+            ]
+        )
+
+        result = response.choices[0].message.content
+        #add to outcome
+        outcome.append(result)
+
+    print("Result:", outcome)
+    return JSONResponse(content=outcome)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
