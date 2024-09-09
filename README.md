@@ -1,8 +1,8 @@
 
 ```markdown
-# Food Calorie Estimator API
+# Miscellenous APIs
 
-This is a FastAPI-based application that estimates the calories in food items by analyzing images. The API uses OpenAI's API to process images and provide approximate calorie counts.
+These are different apis, I've been experimenting with. README is outdated.. just look at the code :)
 
 ## Features
 
